@@ -15,11 +15,11 @@
 
 """Utility functions for computing FID/Inception scores."""
 
-import jax
+# import jax
 import numpy as np
 import six
 import tensorflow as tf
-import tensorflow_gan as tfgan
+# import tensorflow_gan as tfgan
 import tensorflow_hub as tfhub
 
 INCEPTION_TFHUB = 'https://tfhub.dev/tensorflow/tfgan/eval/inception/1'

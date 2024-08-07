@@ -15,9 +15,11 @@
 
 # pylint: skip-file
 """Return training and evaluation/test datasets from config files."""
-import jax
+# import jax
 import tensorflow as tf
 import tensorflow_datasets as tfds
+
+from datasets_anomaly import AnomalyDatamodule
 
 
 def get_data_scaler(config):
@@ -81,9 +83,13 @@ def get_dataset(config, uniform_dequantization=False, evaluation=False):
   """
   # Compute batch size for this worker.
   batch_size = config.training.batch_size if not evaluation else config.eval.batch_size
-  if batch_size % jax.device_count() != 0:
+
+  # n_devices = jax.device_count()
+  n_devices = len(tf.config.list_physical_devices('GPU'))
+
+  if batch_size % n_devices != 0:
     raise ValueError(f'Batch sizes ({batch_size} must be divided by'
-                     f'the number of devices ({jax.device_count()})')
+                     f'the number of devices ({n_devices})')
 
   # Reduce this when image resolution is too large and data pointer is stored
   shuffle_buffer_size = 10000
@@ -141,6 +147,18 @@ def get_dataset(config, uniform_dequantization=False, evaluation=False):
   elif config.data.dataset in ['FFHQ', 'CelebAHQ']:
     dataset_builder = tf.data.TFRecordDataset(config.data.tfrecords_path)
     train_split_name = eval_split_name = 'train'
+
+  elif config.data.dataset == 'mvtec':
+    datamodule = AnomalyDatamodule(config)
+    train_ds = datamodule.train_dataloader()
+    eval_ds = datamodule.val_dataloader()
+    return train_ds, eval_ds, None
+
+  elif config.data.dataset == 'visa':
+    datamodule = AnomalyDatamodule(config)
+    train_ds = datamodule.train_dataloader()
+    eval_ds = datamodule.val_dataloader()
+    return train_ds, eval_ds, None
 
   else:
     raise NotImplementedError(

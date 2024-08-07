@@ -23,7 +23,7 @@ import time
 
 import numpy as np
 import tensorflow as tf
-import tensorflow_gan as tfgan
+# import tensorflow_gan as tfgan
 import logging
 # Keep the import below for registering all model definitions
 from models import ddpm, ncsnv2, ncsnpp
@@ -124,8 +124,18 @@ def train(config, workdir):
 
   for step in range(initial_step, num_train_steps + 1):
     # Convert data to JAX arrays and normalize them. Use ._numpy() to avoid copy.
-    batch = torch.from_numpy(next(train_iter)['image']._numpy()).to(config.device).float()
-    batch = batch.permute(0, 3, 1, 2)
+
+    try:
+        batch = next(train_iter)['image'].to(config.device)
+    except StopIteration:
+        # StopIteration is thrown if dataset ends
+        # reinitialize data loader
+        train_iter = iter(train_ds)
+        batch = next(train_iter)['image'].to(config.device)
+
+    if not isinstance(batch, torch.Tensor):
+      batch = torch.from_numpy(batch._numpy()).float()
+      batch = batch.permute(0, 3, 1, 2)
     batch = scaler(batch)
     # Execute one training step
     loss = train_step_fn(state, batch)
@@ -139,8 +149,17 @@ def train(config, workdir):
 
     # Report the loss on an evaluation dataset periodically
     if step % config.training.eval_freq == 0:
-      eval_batch = torch.from_numpy(next(eval_iter)['image']._numpy()).to(config.device).float()
-      eval_batch = eval_batch.permute(0, 3, 1, 2)
+
+      try:
+        eval_batch = next(eval_iter)['image'].to(config.device)
+      except StopIteration:
+        eval_iter = iter(eval_ds)
+        eval_batch = next(eval_iter)['image'].to(config.device)
+
+      if not isinstance(eval_batch, torch.Tensor):
+        eval_batch = torch.from_numpy(eval_batch._numpy()).float()
+        eval_batch = eval_batch.permute(0, 3, 1, 2)
+
       eval_batch = scaler(eval_batch)
       eval_loss = eval_step_fn(state, eval_batch)
       logging.info("step: %d, eval_loss: %.5e" % (step, eval_loss.item()))
@@ -287,8 +306,11 @@ def evaluate(config,
       all_losses = []
       eval_iter = iter(eval_ds)  # pytype: disable=wrong-arg-types
       for i, batch in enumerate(eval_iter):
-        eval_batch = torch.from_numpy(batch['image']._numpy()).to(config.device).float()
-        eval_batch = eval_batch.permute(0, 3, 1, 2)
+
+        eval_batch = batch['image'].to(config.device)
+        if not isinstance(eval_batch, torch.Tensor):
+          eval_batch = torch.from_numpy(eval_batch._numpy()).float()
+          eval_batch = eval_batch.permute(0, 3, 1, 2)
         eval_batch = scaler(eval_batch)
         eval_loss = eval_step(state, eval_batch)
         all_losses.append(eval_loss.item())
@@ -309,9 +331,13 @@ def evaluate(config,
         bpd_iter = iter(ds_bpd)  # pytype: disable=wrong-arg-types
         for batch_id in range(len(ds_bpd)):
           batch = next(bpd_iter)
-          eval_batch = torch.from_numpy(batch['image']._numpy()).to(config.device).float()
-          eval_batch = eval_batch.permute(0, 3, 1, 2)
+
+          eval_batch = batch['image'].to(config.device)
+          if not isinstance(eval_batch, torch.Tensor):
+            eval_batch = torch.from_numpy(eval_batch._numpy()).float()
+            eval_batch = eval_batch.permute(0, 3, 1, 2)
           eval_batch = scaler(eval_batch)
+
           bpd = likelihood_fn(score_model, eval_batch)[0]
           bpd = bpd.detach().cpu().numpy().reshape(-1)
           bpds.extend(bpd)
